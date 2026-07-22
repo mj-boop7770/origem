@@ -31,6 +31,10 @@
   .fade-in{animation:fadeIn .4s ease both;}
   @keyframes fadeIn{from{opacity:0; transform:translateY(6px)} to{opacity:1; transform:translateY(0)}}
   @media (prefers-reduced-motion: reduce){ .fade-in{animation:none} }
+  .tab{border-bottom:2px solid transparent; color:var(--muted); transition:.15s;}
+  .tab.active{color:var(--text); border-color:var(--export); font-weight:600;}
+  .badge-verif{background:rgba(122,155,118,.12); color:var(--produtor); border:1px solid var(--produtor);}
+  .badge-pendente{background:rgba(154,160,172,.12); color:var(--muted); border:1px solid var(--muted);}
 </style>
 </head>
 <body class="min-h-screen antialiased">
@@ -48,9 +52,14 @@
     <p class="mono text-[11px] tracking-[0.2em] text-[var(--muted)] uppercase mb-4" data-i18n="eyebrow">Fonte aberta &middot; dados oficiais</p>
     <h1 class="text-3xl font-extrabold tracking-tight leading-tight" data-i18n="title">Quem paga mais pelo<br>que a África produz?</h1>
     <p class="text-sm text-[var(--muted)] mt-3 leading-relaxed" data-i18n="subtitle">Preço pago ao produtor vs. preço de referência na exportação, por país e por produto — direto das fontes oficiais, sem intermediário.</p>
+
+    <div class="flex gap-6 mt-5 border-b border-[var(--line)]">
+      <button id="tab-precos" class="tab active mono text-sm px-1 pb-3">Preços</button>
+      <button id="tab-diretorio" class="tab mono text-sm px-1 pb-3">Diretório</button>
+    </div>
   </header>
 
-  <main class="max-w-2xl mx-auto px-5 py-6">
+  <main class="max-w-2xl mx-auto px-5 py-6" id="view-precos">
 
     <!-- search -->
     <div class="relative mb-4">
@@ -80,6 +89,18 @@
     <div id="lista" class="space-y-4"></div>
 
     <p id="vazio" class="hidden text-center text-sm text-[var(--muted)] py-16" data-i18n="vazio">Nenhum dado para este produto ainda.</p>
+  </main>
+
+  <main class="max-w-2xl mx-auto px-5 py-6 hidden" id="view-diretorio">
+    <div class="flex gap-2 overflow-x-auto pb-2 mb-4 no-scrollbar" id="filtrosCategoria">
+      <button data-cat="vendeurs" class="chip active shrink-0 px-3 py-1.5 rounded-full text-xs mono">Vendedores</button>
+      <button data-cat="acheteurs" class="chip shrink-0 px-3 py-1.5 rounded-full text-xs mono">Compradores</button>
+      <button data-cat="logistique" class="chip shrink-0 px-3 py-1.5 rounded-full text-xs mono">Logística</button>
+      <button data-cat="agents" class="chip shrink-0 px-3 py-1.5 rounded-full text-xs mono">Agentes</button>
+    </div>
+    <div id="listaAtores" class="space-y-3"></div>
+    <p id="atoresVazio" class="hidden text-center text-sm text-[var(--muted)] py-16">Nenhum ator verificado nesta categoria ainda.</p>
+    <p id="atoresErro" class="hidden text-center text-sm text-[var(--muted)] py-16">Não foi possível carregar o diretório — a base de dados ainda não está ligada.</p>
   </main>
 
   <footer class="max-w-2xl mx-auto px-5 py-10 border-t border-[var(--line)] mt-6">
@@ -252,46 +273,4 @@ function cardHTML(d){
     ${d.compradores ? `<p class="text-xs mt-2"><span class="mono text-[var(--muted)]">${dict.compradores}:</span> ${d.compradores} ${d.link_compradores ? `<a href="${d.link_compradores}" target="_blank" rel="noopener" class="underline" style="color:var(--export)">[${LANG==='pt'?'fonte':LANG==='fr'?'source':LANG==='zh'?'来源':'source'}]</a>` : `<span class="mono text-[10px]" style="color:var(--gap)">[${LANG==='pt'?'não confirmado':LANG==='fr'?'non confirmé':LANG==='zh'?'未证实':'unconfirmed'}]</span>`}</p>` : ''}
     ${d.estatuto ? `<p class="mono text-[10px] mt-2" style="color:${d.estatuto==='Completo'?'var(--produtor)':d.estatuto==='Parcial'?'var(--export)':'var(--gap)'}">${dict.estatuto}: ${d.estatuto}</p>` : ''}
     ${d.zona_producao ? `<p class="text-xs mt-3"><span class="mono text-[var(--muted)]">${dict.zona}:</span> ${d.zona_producao}</p>` : ''}
-    ${d.estacao ? `<p class="text-xs mt-1"><span class="mono text-[var(--muted)]">${dict.estacaoLabel}:</span> ${d.estacao}</p>` : ''}
-    ${d.transporte_logistica ? `<p class="text-xs mt-1"><span class="mono text-[var(--muted)]">${dict.transporte}:</span> ${d.transporte_logistica}</p>` : ''}
-    ${d.nota ? `<p class="text-xs text-[var(--muted)] mt-3 leading-relaxed">${d.nota}</p>` : ''}
-  </div>`;
-}
-
-let DADOS = [];
-applyI18n();
-
-let FILTRO_PRODUTO = 'todos';
-
-function render(){
-  const lista = document.getElementById('lista');
-  const vazio = document.getElementById('vazio');
-  const buscaLower = BUSCA.trim().toLowerCase();
-  const items = DADOS.filter(d=>{
-    if(FILTRO_PRODUTO!=='todos' && d.produto!==FILTRO_PRODUTO) return false;
-    if(PAIS_ATIVO!=='todos' && d.pais!==PAIS_ATIVO) return false;
-    if(buscaLower){
-      const alvo = (d.produto+' '+tr(d.produto)+' '+d.pais+' '+tr(d.pais)+' '+(d.fonte||'')).toLowerCase();
-      if(!alvo.includes(buscaLower)) return false;
-    }
-    return true;
-  });
-  lista.innerHTML = items.map(cardHTML).join('');
-  vazio.classList.toggle('hidden', items.length>0);
-}
-
-let FILTROS_BOUND = false;
-function buildFiltros(){
-  const produtos = [...new Set(DADOS.map(d=>d.produto))];
-  const wrap = document.getElementById('filtros');
-  wrap.querySelectorAll('button[data-filtro]:not([data-filtro="todos"])').forEach(b=>b.remove());
-  produtos.forEach(p=>{
-    const b = document.createElement('button');
-    b.className = 'chip shrink-0 px-3 py-1.5 rounded-full text-xs mono' + (p===FILTRO_PRODUTO?' active':'');
-    b.textContent = tr(p);
-    b.dataset.filtro = p;
-    wrap.appendChild(b);
-  });
-  if(!FILTROS_BOUND){
-    wrap.addEventListener('click', e=>{
-      const btn = e.target.closest('button[data-filtro]');
+    ${d.estacao ? `<p class="text-xs mt-1"><span class="mono text-[var(--muted)]">${dict.estacaoLabel}:</span> ${d.estacao}</p>` :
